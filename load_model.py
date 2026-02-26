@@ -4,14 +4,16 @@ from utils import MyDataset, test_with_results
 import torch.nn as nn
 
 
+
 class MultiInputModel(nn.Module):
     def __init__(self, time_layers, fa_layers, fa_cnn_layers, time_cnn_layers):
         super(MultiInputModel, self).__init__()
+
         self.time_block = nn.Sequential(
             nn.Conv1d(9, 16, 2, 2, 1), nn.ReLU(), nn.MaxPool1d(2),
             nn.Conv1d(16, 16, 2, 2, 1), nn.ReLU(), nn.MaxPool1d(2),
-            nn.Conv1d(16, 16, 2, 1), nn.ReLU(),
-            nn.Conv1d(16, 32, 2, 1), nn.ReLU(),
+            nn.Conv1d(16, 16, 2, 1, 1), nn.ReLU(),
+            nn.Conv1d(16, 32, 2, 1, 1), nn.ReLU(),
             *self._create_intermediate_conv_layers(32, time_cnn_layers),
             nn.Conv1d(32, 64, 2, 2, 1), nn.ReLU(), nn.MaxPool1d(2)
         )
@@ -33,7 +35,7 @@ class MultiInputModel(nn.Module):
         )
 
         self.fc_final = nn.Sequential(
-            nn.Linear(96 + 30 + 8, 64), nn.ReLU(), nn.Dropout(0.5),
+            nn.Linear(96 + 26 + 8, 64), nn.ReLU(), nn.Dropout(0.5),
             nn.Linear(64, 32), nn.ReLU(), nn.Dropout(0.4),
             nn.Linear(32, 2)
         )
@@ -65,7 +67,7 @@ params = {
     'time_layers': 2,
     'fa_layers': 2,
     'time_cnn_layers': 2,
-    'fa_cnn_layers': 3,
+    'fa_cnn_layers': 2,
     'epochs': 100,
     'lr': 0.001
 }
@@ -94,4 +96,5 @@ if __name__ == "__main__":
     labels, preds, loss, acc, outputs = test_with_results(model, test_loader, device, criterion)
 
     print(f"Test Loss: {loss:.4f}, Test Accuracy: {acc:.4f}")
+
 
