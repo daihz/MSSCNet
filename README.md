@@ -12,5 +12,5 @@ The repository contains three Python scripts and one model weight file:
 
 ## Paper
 
-Dai, H., Hao, Y., Miao, F., Luan, S., Zhang, Y., Ma, Q., ... & Song, J. (2026). *Classifying natural and non-natural earthquakes based on multimodal data and neural networks*. **Journal of Applied Geophysics**, 106164.  
+Dai, H., Hao, Y., Miao, F., Luan, S., Zhang, Y., Ma, Q., ... & Song, J. (2026). *Classifying natural and non-natural earthquakes based on multimodal data and neural networks*. Journal of Applied Geophysics, 106164.  
 https://doi.org/10.1016/j.jappgeo.2026.106164
