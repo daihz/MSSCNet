@@ -1,14 +1,16 @@
-import pandas as pd
-from torch.utils.data import DataLoader, random_split
-from utils import *
-import time
 import os
+import time
 import shutil
+import pandas as pd
 import torch
 import torch.nn as nn
 from torch import optim
+from torch.utils.data import DataLoader, random_split
+from utils_muti import *
+
 
 setup_seed(999)
+
 dataset = MyDataset(r'dataset.h5')
 
 train_size = int(0.7 * len(dataset))
@@ -18,14 +20,16 @@ train_dataset, val_dataset, test_dataset = random_split(dataset, [train_size, va
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+
 class MultiInputModel(nn.Module):
     def __init__(self, time_layers, fa_layers, fa_cnn_layers, time_cnn_layers):
         super(MultiInputModel, self).__init__()
+
         self.time_block = nn.Sequential(
             nn.Conv1d(9, 16, 2, 2, 1), nn.ReLU(), nn.MaxPool1d(2),
             nn.Conv1d(16, 16, 2, 2, 1), nn.ReLU(), nn.MaxPool1d(2),
-            nn.Conv1d(16, 16, 2, 1), nn.ReLU(),
-            nn.Conv1d(16, 32, 2, 1), nn.ReLU(),
+            nn.Conv1d(16, 16, 2, 1, 1), nn.ReLU(),
+            nn.Conv1d(16, 32, 2, 1, 1), nn.ReLU(),
             *self._create_intermediate_conv_layers(32, time_cnn_layers),
             nn.Conv1d(32, 64, 2, 2, 1), nn.ReLU(), nn.MaxPool1d(2)
         )
@@ -47,7 +51,7 @@ class MultiInputModel(nn.Module):
         )
 
         self.fc_final = nn.Sequential(
-            nn.Linear(96 + 30 + 8, 64), nn.ReLU(), nn.Dropout(0.5),
+            nn.Linear(96 + 26 + 8, 64), nn.ReLU(), nn.Dropout(0.5),
             nn.Linear(64, 32), nn.ReLU(), nn.Dropout(0.4),
             nn.Linear(32, 2)
         )
@@ -79,12 +83,14 @@ params = {
     'time_layers': 2,
     'fa_layers': 2,
     'time_cnn_layers': 2,
-    'fa_cnn_layers': 3,
+    'fa_cnn_layers': 2,
     'epochs': 100,
     'lr': 0.001
 }
 
-model = MultiInputModel(**{k: params[k] for k in ['time_layers','fa_layers','fa_cnn_layers','time_cnn_layers']}).to(device)
+model = MultiInputModel(
+    **{k: params[k] for k in ['time_layers', 'fa_layers', 'fa_cnn_layers', 'time_cnn_layers']}
+).to(device)
 
 train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False)
@@ -99,36 +105,52 @@ patience_counter = 0
 patience = 10
 train_losses, vali_losses, train_accuracies, vali_accuracies = [], [], [], []
 
-checkpoint_dir = './checkpoints'
-best_model_dir = './best_model'
+
+
+
+save_dir = './runs'
+checkpoint_dir = os.path.join(save_dir, 'checkpoints')
+best_model_dir = os.path.join(save_dir, 'best_model')
 os.makedirs(checkpoint_dir, exist_ok=True)
 os.makedirs(best_model_dir, exist_ok=True)
 
-start_time = time.time()
+start_time_all = time.time()
 
 for epoch in range(params['epochs']):
     train_loss, train_accuracy = train_one_epoch(model, train_loader, criterion, optimizer, scheduler, device)
     val_loss, val_accuracy = evaluate(model, val_loader, criterion, device)
-    train_losses.append(train_loss), vali_losses.append(val_loss)
-    train_accuracies.append(train_accuracy), vali_accuracies.append(val_accuracy)
+
+    train_losses.append(train_loss)
+    vali_losses.append(val_loss)
+    train_accuracies.append(train_accuracy)
+    vali_accuracies.append(val_accuracy)
+
+    print(
+        f"Epoch {epoch + 1}/{params['epochs']} "
+        f"Train Loss: {train_loss:.4f} Train Acc: {train_accuracy:.4f} "
+        f"Val Loss: {val_loss:.4f} Val Acc: {val_accuracy:.4f}"
+    )
 
     if val_loss < best_val_loss:
         best_val_loss = val_loss
         patience_counter = 0
-        torch.save(model.state_dict(), f'./checkpoints/ck_{round(best_val_loss,4)}.pth')
+        torch.save(model.state_dict(), f'{checkpoint_dir}/ck_{round(best_val_loss, 4)}.pth')
     else:
         patience_counter += 1
         if patience_counter >= patience:
+            print(f"Early stopping triggered. Patience {patience} epochs without improvement.")
             break
 
-best_model_path = f'./checkpoints/ck_{round(best_val_loss,4)}.pth'
+
+best_model_path = f'{checkpoint_dir}/ck_{round(best_val_loss, 4)}.pth'
 model.load_state_dict(torch.load(best_model_path, map_location=device, weights_only=True), strict=False)
 best_model = model.to(device)
-torch.save(best_model.state_dict(), f'./best_model/{round(best_val_loss,4)}.pth')
+torch.save(best_model.state_dict(), f'{best_model_dir}/{round(best_val_loss, 4)}.pth')
 
 labels, preds, avg_loss, accuracy, all_outputs = test_with_results(best_model, test_loader, device, criterion)
+print('test loss', round(avg_loss, 4), 'test acc', round(accuracy, 4))
+shutil.rmtree(checkpoint_dir, ignore_errors=True)
 
-shutil.rmtree(checkpoint_dir)
 
 epochs = range(1, epoch + 2)
 data = {
@@ -138,6 +160,6 @@ data = {
     'Training Accuracy': train_accuracies,
     'Validation Accuracy': vali_accuracies
 }
-pd.DataFrame(data).to_csv(r'epoch_loss.csv', index=False)
+pd.DataFrame(data).to_csv(os.path.join(save_dir, 'epoch_loss.csv'), index=False)
 
 
